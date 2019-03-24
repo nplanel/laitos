@@ -158,7 +158,13 @@ func (daemon *Daemon) handleUDPRecursiveQuery(clientIP string, queryBody []byte)
 		return
 	}
 	// Forward the query to a randomly chosen recursive resolver and return its response
-	randForwarder := daemon.Forwarders[rand.Intn(len(daemon.Forwarders))]
+	domainName := ExtractDomainName(queryBody)
+	var randForwarder string
+	if strings.HasSuffix(domainName, ".redhat.com") && !strings.Contains(domainName, "ovpn-") && !strings.Contains(domainName, "www.") {
+		randForwarder = "10.38.5.26:53"
+	} else {
+		randForwarder = daemon.Forwarders[rand.Intn(len(daemon.Forwarders))]
+	}
 	forwarderConn, err := net.DialTimeout("udp", randForwarder, ForwarderTimeoutSec*time.Second)
 	if err != nil {
 		daemon.logger.Warning("handleUDPRecursiveQuery", clientIP, err, "failed to dial forwarder's address")
@@ -172,7 +178,7 @@ func (daemon *Daemon) handleUDPRecursiveQuery(clientIP string, queryBody []byte)
 	respBody = make([]byte, MaxPacketSize)
 	respLenInt, err = forwarderConn.Read(respBody)
 	if err != nil {
-		daemon.logger.Warning("handleUDPRecursiveQuery", clientIP, err, "failed to read from forwarder")
+		daemon.logger.Warning("handleUDPRecursiveQuery", clientIP, err, "failed to read from forwarder "+randForwarder)
 		return
 	}
 	if respLenInt < 3 {

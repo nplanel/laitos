@@ -179,7 +179,13 @@ func (daemon *Daemon) handleTCPRecursiveQuery(clientIP string, queryLen, queryBo
 		daemon.logger.Warning("handleTCPRecursiveQuery", clientIP, nil, "client IP is not allowed to query")
 		return
 	}
-	randForwarder := daemon.Forwarders[rand.Intn(len(daemon.Forwarders))]
+	domainName := ExtractDomainName(queryBody)
+	var randForwarder string
+	if strings.HasSuffix(domainName, ".redhat.com") && !strings.Contains(domainName, "ovpn-") && !strings.Contains(domainName, "www.") {
+		randForwarder = "10.38.5.26:53"
+	} else {
+		randForwarder = daemon.Forwarders[rand.Intn(len(daemon.Forwarders))]
+	}
 	// Forward the query to a randomly chosen recursive resolver
 	myForwarder, err := net.DialTimeout("tcp", randForwarder, ForwarderTimeoutSec*time.Second)
 	if err != nil {
@@ -195,7 +201,7 @@ func (daemon *Daemon) handleTCPRecursiveQuery(clientIP string, queryLen, queryBo
 		daemon.logger.Warning("handleTCPRecursiveQuery", clientIP, err, "failed to write length to forwarder")
 		return
 	} else if _, err = myForwarder.Write(queryBody); err != nil {
-		daemon.logger.Warning("handleTCPRecursiveQuery", clientIP, err, "failed to write query to forwarder")
+		daemon.logger.Warning("handleTCPRecursiveQuery", clientIP, err, "failed to write query to forwarder "+randForwarder)
 		return
 	}
 	// Read resolver's response
@@ -211,7 +217,7 @@ func (daemon *Daemon) handleTCPRecursiveQuery(clientIP string, queryLen, queryBo
 	}
 	respBody = make([]byte, respLenInt)
 	if _, err = myForwarder.Read(respBody); err != nil {
-		daemon.logger.Warning("handleTCPRecursiveQuery", clientIP, err, "failed to read response from forwarder")
+		daemon.logger.Warning("handleTCPRecursiveQuery", clientIP, err, "failed to read response from forwarder "+randForwarder)
 		return
 	}
 	return
